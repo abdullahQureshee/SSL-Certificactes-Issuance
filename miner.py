@@ -1,6 +1,4 @@
-from OpenSSL import crypto
 from common import hash
-from time import time
 
 class Miner:
     def __init__(self, blockchain):
@@ -9,40 +7,29 @@ class Miner:
         :class Miner: Provides Control for various Proofchain Functions
         :param blockchain: Blockchain the miner is associated to.
         '''
-        
+        self.bc = blockchain
+
         #mixture of public private key within the Openssl module
         #generates a key object not keys
-        self.key = crypto.PKey()
-        #generates keys
-        self.key.generate_key(crypto.TYPE_RSA,1024)
-        
-        self.bc = blockchain
+        self.key = self.bc.create_key()
         
         #tokens issued by miner. entries will be popped out once mined
         self.mytokens = {}
         
         #Certificate of CA miner.
-        self.identity = self.bc.gen_csr(
+        self.identity = self.bc.create_csr(
             CN="ROOTCA",L="RAM",ST="Tense",O="Intel",
             OU="One Block", emailAddress="miner.root@proofchain.com"
         )
-        #first dumps the certificate to str and then extracts signature from
-        #it. Direct extraction is not available in Openssl
-        self.signature = str(
-            crypto.b16encode(
-                crypto.dump_certificate_request(
-                    crypto.FILETYPE_PEM,self.identity
-                )
-            )
-        )[-289:-33]
+        self.signature = self.bc.extract_signature(
+            self.bc.dump(self.identity, 'csr'),
+            'csr',
+            'b16'
+        )
         self.identity = self.create_cert_for(self.identity)
 
         #public key also extracted similar to the signature
-        self.pk = str(
-            crypto.b16encode(
-                crypto.dump_publickey(crypto.FILETYPE_ASN1,self.key)
-            )
-        )
+        self.pk = bytes.decode(self.bc.dump(self.key, 'pk'))
 
     def key_check(self, pk, sig):
         #not yet implemented
@@ -81,11 +68,8 @@ class Miner:
         :param trans: type Transaction: trans to be included in a block
         :returns: signature
         '''
-        t = ((#crypto.b16encode(
-            crypto.sign(self.key,hash(hash(trans)+ self.pk),'sha256')
-            ))
+        t = self.bc.sign(self.key, hash(hash(trans)+ self.pk))
         self.mytokens.setdefault(trans.domain, t)
-        print("Token for",t,"set")
         return t
 
     def token_validation(self, issuedtoken, signedToken, cert,digest='sha256'):
@@ -98,7 +82,7 @@ class Miner:
         :returns: bool
         '''
         try:
-            crypto.verify(cert, signedToken, issuedtoken, digest)
+            self.bc.verify(cert, signedToken, issuedtoken, digest)
         except:
             return False
         return True
@@ -119,7 +103,7 @@ class Miner:
                 "gs": gs,
                 "ids": ids,
                 "domain": trans.domain,
-                "pk": crypto.b16encode(crypto.dump_publickey(crypto.FILETYPE_PEM,pk)),
+                "pk": self.bc.b16encode(self.bc.dump(pk,'pk')),
                 "sig": sig,
                 "expiry": expiry,
                 "CAsig": self.signature
@@ -131,14 +115,6 @@ class Miner:
         return False
 
     def create_cert_for(self,csr):
-        cert = self.bc.create_certificate(csr.get_pubkey())
-        cert.set_subject(csr.get_subject())#req added
-        cert.gmtime_adj_notAfter(365)
-        cert.gmtime_adj_notBefore(0)#valid after 0 seconds
+        cert = self.bc.create_cert_for(csr)
         cert.set_issuer(self.identity.get_subject())
-        #cert.set_pubkey(csr.get_pubkey())
-        key = crypto.load_privatekey(crypto.FILETYPE_PEM,
-            crypto.dump_privatekey(crypto.FILETYPE_PEM,csr.get_pubkey())
-        )
-        cert.sign(key,'sha256')
         return cert

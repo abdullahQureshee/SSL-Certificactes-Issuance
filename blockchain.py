@@ -1,12 +1,11 @@
 from miner import Miner
 from block import Block
 from transaction import Transaction
-from random import randint
 from OpenSSL import crypto
-from os import path
-class Proofchain:
+
+class Blockchain:
     '''
-    Class: Proofchain: Provides with all the basic functionality of 'proofchain'
+    Class: Blockchain: Provides with all the basic functionality of 'proofchain'
         which includes,
             abstraction for entity creation (block, trans, miner etc.)
             sign/verify for signatures
@@ -26,13 +25,13 @@ class Proofchain:
         }
     def __init__(self):
         self.chain = []
-        self.chain.append(self.createBlock(Proofchain.GENESIS))
+        self.chain.append(self.createBlock(Blockchain.GENESIS))
         self.utp = {} #unvalidated transactions pool
         self.miners = []
         self.registereds = {} #storageArray for verifieds
         self.tokened = {} #those domains who have been given a token
 
-    def gen_csr(self, key=None, **kwargs):
+    def create_csr(self, key=None, **kwargs):
         '''
         Returns a CSR object signed with key - if provided.
         :param key: type [userdefined]: key to sign CSR with
@@ -76,15 +75,11 @@ class Proofchain:
 
     def createTrans(self, transdata):
         t = Transaction(**transdata)
-        #self.utp.append(t)
         return t
 
     def sign(self, key, data, digest = 'sha256'):
         return crypto.sign(key, data, digest)
-        
-    def load_privatekey(self, key, _type=crypto.FILETYPE_PEM):
-        return crypto.load_privatekey(_type, key)
-        
+
     def create_certificate(self, key):
         c = crypto.X509()
         c.set_pubkey(key)
@@ -92,31 +87,19 @@ class Proofchain:
         #c.set_notAfter()
         return c
 
-    def write(self, _path, mode, data):
-        #if path.exists(_path):
-        f = open(_path, 'w' + mode)
-        count = f.write(data)
-        f.close()
-        return count
-        raise Exception("Path Doesn't Exist\n")
-
-    def read(self, _path, mode=""):
-        if path.exists(_path):
-            return open(_path, 'r' + mode).read()
-        raise Exception("Path Doesn't Exist\n")
-            
-    def get_file_descriptor(self, _path, mode):
-        if path.exists(_path):
-            return open(p, mode)
-        raise Exception("Path Doesn't Exist\n")
-
-    def file_exists(self, _path):
-        if path.exists(_path):
-            return True
-        return False
-
-    def path_join(self, *args):
-        return path.join(*args)
+    def create_cert_for(self, csr):
+        pkey = csr.get_pubkey()
+        cert = self.create_certificate(pkey)
+        cert.set_subject(csr.get_subject())#req added
+        cert.gmtime_adj_notAfter(365)
+        cert.gmtime_adj_notBefore(0)#valid after 0 seconds
+        #sign requires secret key
+        pkey = self.load(
+            self.dump(pkey, 'sk'),
+            'sk'
+        )
+        cert.sign(pkey,'sha256')
+        return cert
 
     def verify(self, cert, sig, data, digest='sha256'):
         try:
@@ -125,13 +108,40 @@ class Proofchain:
         except:
             return False
 
-    def dump(self, cert, what, _type=crypto.FILETYPE_PEM):
-        if what == 'cert':
-            return crypto.dump_certificate(_type, cert)
+    def extract_signature(self, data, what, encoding):
         if what == 'csr':
-            return crypto.dump_certificate_request(_type, cert)
+            if encoding != 'b16':
+                data = crypto.b16encode(data)
+            return data[-289:-33]
+
+    def dump(self, data, what, _type=crypto.FILETYPE_PEM):
+        if what == 'cert':
+            data =  crypto.dump_certificate(_type, data)
+        elif what == 'csr':
+            data = crypto.dump_certificate_request(_type, data)
+        elif what == 'pk':
+            data = crypto.dump_publickey(_type, data)
+        elif what == 'sk':
+            data = crypto.dump_privatekey(_type, data)
+        else:
+            raise Exception("Invalid type specified in arg 'what'. Can only be cert, csr, pk, sk.\n")
+        return data
+
+    def load(self, data, what, _type=crypto.FILETYPE_PEM):
+        if what == 'cert':
+            return crypto.load_certificate(_type, data)
+        if what == 'csr':
+            return crypto.load_certificate_request(_type, data)
         if what == 'pk':
-            return crypto.dump_publickey(_type, cert)
+            return crypto.load_publickey(_type, data)
         if what == 'sk':
-            return crypto.dump_privatekey(_type, cert)
+            return crypto.load_privatekey(_type, data)
         raise Exception("Invalid type specified. Can only be cert, csr, pk, sk.\n")
+
+    def create_key(self):
+        k = crypto.PKey()
+        k.generate_key(crypto.TYPE_RSA, 1024)
+        return k
+
+    def b16encode(self, data):
+        return crypto.b16encode(data)

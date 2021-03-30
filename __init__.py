@@ -1,19 +1,17 @@
 from flask import Flask, render_template, url_for, request, redirect, send_file
-from proofchain import Proofchain
-from random import randint
-from OpenSSL import crypto
-from os import path
+from blockchain import Blockchain
 from transaction import Transaction
 from zipfile38 import ZipFile
+from filehandler import FileHandler
 
 
-proofchain = Proofchain()
+blockchain = Blockchain()
+filer = FileHandler()
 loggedin = None
 app = Flask(__name__)
 csr_cache = {}
 user_returned_tokens = {}
-ROOTCA = proofchain.createMiner()
-proofchain.gen_csr
+ROOTCA = blockchain.createMiner()
 
 @app.route("/getcert")
 def getcert():
@@ -23,11 +21,11 @@ def getcert():
 def getcert1():
     name = request.form.get('name')
     if name is not None:
-        if proofchain.file_exists(
-            proofchain.path_join(app.root_path, "certificates", name + ".crt")
+        if filer.file_exists(
+            filer.path_join(app.root_path, "certificates", name + ".crt")
         ):
             return send_file(
-                proofchain.path_join(
+                filer.path_join(
                         app.root_path, "certificates", name + ".crt"
                     ),
                 as_attachment=True)
@@ -40,8 +38,8 @@ def gen_token1():
     domain = form.get('domain')
     token = form.get('token')
     if token is not None and domain is not None:
-        proofchain.write(
-            proofchain.path_join(app.root_path,'tokens',domain+'.TOKEN',"",token)
+        filer.write(
+            filer.path_join(app.root_path,'tokens',domain+'.TOKEN',"",token)
         )
     return redirect('/miner')
 
@@ -52,11 +50,11 @@ def revoke():
 
 @app.route("/gen_token/<tx>/<status>")
 def gen_token(tx,status):
-    if status == 'initial' and proofchain.file_exists(
-            proofchain.path_join(app.root_path, "tokens", tx + ".TOKEN")
+    if status == 'initial' and filer.file_exists(
+            filer.path_join(app.root_path, "tokens", tx + ".TOKEN")
     ):
         return redirect("/miner")
-    tx = proofchain.utp.get(tx)
+    tx = blockchain.utp.get(tx)
     if tx is not None:
         result = ROOTCA.domain_check(tx.domain,tx.pk)
         if status == 'revoke':
@@ -73,8 +71,8 @@ def gen_token(tx,status):
             header="domain already exists" if status == 'initial' else "domain doesn't exist",
             content = " ")
         token = ROOTCA.token_placement(tx)
-        proofchain.write(
-            proofchain.path_join(app.root_path, "tokens", tx.domain + ".TOKEN"),
+        filer.write(
+            filer.path_join(app.root_path, "tokens", tx.domain + ".TOKEN"),
             'b', token
         )
     return redirect("/miner")
@@ -85,43 +83,32 @@ def validate():
 
 @app.route("/validate2/<domain>")
 def validate2(domain):
-    p = proofchain.path_join(app.root_path,"usrplacedtokens",domain+".TOKEN")
-    if proofchain.file_exists(p):
+    p = filer.path_join(app.root_path,"usrplacedtokens",domain+".TOKEN")
+    if filer.file_exists(p):
         csr = csr_cache.get(domain)
-        usrtoken = proofchain.read(p,'b')
-        #token = open(proofchain.path_join(app.root_path,'tokens',domain+".TOKEN"),
-        #'rb').read()#ROOTCA.mytokens.get(domain)
-        token = proofchain.read(
-            proofchain.path_join(app.root_path,
+        usrtoken = filer.read(p,'b')
+        token = filer.read(
+            filer.path_join(app.root_path,
                 "tokens",domain+".TOKEN"
         ),'b')
         cert = ROOTCA.create_cert_for(csr)
-        #try:
-        #    crypto.verify(cert,
-        #        usrtoken,
-        #        token,
-        #        'sha256')
-        #except:
-        #    return redirect("/miner")
-        if proofchain.verify(cert, usrtoken, token):
+        if blockchain.verify(cert, usrtoken, token):
             pass
         else:
             return redirect("/miner")
-        #open(proofchain.path_join(app.root_path,'certificates',domain+".crt"),
-        #'wb').write(crypto.dump_certificate(crypto.FILETYPE_PEM,cert))
-        
+
         csr_cache.pop(domain)
-        if ROOTCA.mine(proofchain.utp.get(domain),cert.get_notAfter()):
-            proofchain.write(
-                proofchain.path_join(app.root_path, "certificates",
+        if ROOTCA.mine(blockchain.utp.get(domain),cert.get_notAfter()):
+            filer.write(
+                filer.path_join(app.root_path, "certificates",
                 domain + ".crt"), 'b',
-                proofchain.dump(cert,'cert')
+                blockchain.dump(cert,'cert')
             )
     return redirect("/miner")
 
 @app.route("/miner")
 def miner():
-    return render_template("miner.html",utp=proofchain.utp,
+    return render_template("miner.html",utp=blockchain.utp,
     usrToken = csr_cache,mytokens = ROOTCA.mytokens)
 
 @app.route("/gettoken")
@@ -131,12 +118,12 @@ def gettoken():
 @app.route("/gettoken1",methods=['POST'])
 def gettoken1():
     domain = request.form['domain']
-    if proofchain.file_exists(
-        proofchain.path_join(
+    if filer.file_exists(
+        filer.path_join(
             app.root_path, "tokens", domain + ".TOKEN"
         )
     ):
-        return send_file(proofchain.path_join(app.root_path, "tokens", domain + ".TOKEN")
+        return send_file(filer.path_join(app.root_path, "tokens", domain + ".TOKEN")
             , as_attachment=True)
     return render_template("errusr.html", header="Doesn't Exists!",
         content = "Token doesn't exist.")
@@ -144,16 +131,14 @@ def gettoken1():
 @app.route("/placetoken",methods=["POST"])
 def placetoken():
     name = request.form['name']
-    proofchain.write(
-        proofchain.path_join(
+    filer.write(
+        filer.path_join(
             app.root_path, "usrplacedtokens",
             name + ".TOKEN"
         ),
         'b',
         request.files['token'].read()
     )
-    #open(proofchain.path_join(app.root_path,"usrplacedtokens",request.form['name']+".TOKEN"),
-    #'wb').write(request.files['token'].read())
     return redirect("/domain/"+name)
 
 @app.route("/signtoken", methods=["POST"])
@@ -161,23 +146,19 @@ def signtoken():
     key = request.files['key'].read()
     token = request.files['token'].read()
     name = request.form['name']
-    name = proofchain.path_join(
+    name = filer.path_join(
         app.root_path,
         "tokens",
         "signed_"+name+".TOKEN"
     )
-    key = proofchain.load_privatekey(key)
-    cert = proofchain.create_certificate(key)
-    #f = open(proofchain.path_join(app.root_path,"tokens","signed_"+name+".TOKEN"),'wb')
-    #f.write(proofchain.sign(key,token,'sha256'))
-    #f.flush()
-    #f.close()
-    proofchain.write(
+    key = blockchain.load(key,'sk')
+    cert = blockchain.create_certificate(key)
+    filer.write(
         name,
         'b',
-        proofchain.sign(key,token))
+        blockchain.sign(key,token))
     return send_file(
-        proofchain.path_join(app.root_path,"tokens",name),
+        filer.path_join(app.root_path,"tokens",name),
         as_attachment=True
     )
 
@@ -192,9 +173,9 @@ def domain(name):
 @app.route("/viewrevoked1", methods=["POST"])
 def viewrevoked1():
     pk = request.files['pk'].read()
+    pk = blockchain.b16encode(pk)
     domains = []
-    for block in proofchain.chain:
-        print(block)
+    for block in blockchain.chain:
         if block.crt == 'revoke':
             if pk == block.pk:
                 domains.append(block.domain)
@@ -209,9 +190,9 @@ def viewrevoked():
 @app.route("/certificates1", methods=["POST"])
 def certificates1():
     pk = request.files['pk'].read()
+    pk = blockchain.b16encode(pk)
     domains = []
-    for block in proofchain.chain:
-        print(block)
+    for block in blockchain.chain:
         if block.domain in domains and block.crt == 'revoke':
             domains.remove(block.domain)
             continue
@@ -228,6 +209,7 @@ def certificates():
 @app.route("/pendingreqs1",methods=['POST'])
 def pendingreqs1():
     pk = request.files['pk'].read()
+    pk = blockchain.b16encode(pk)
     domains = []
     for domain, data in csr_cache.items():
         if pk == crypto.b16encode(crypto.dump_publickey(crypto.FILETYPE_PEM,data.get_pubkey())):
@@ -245,10 +227,10 @@ def pendingreqs():
 @app.route("/createcsr/<status>", methods=['POST','GET'])
 def createcsr(status):
     form = request.form
-    _path = proofchain.path_join(app.root_path,"csr/")
+    _path = filer.path_join(app.root_path,"csr/")
     nodename = form['nodename']
     if status=='initial':
-        req = proofchain.gen_csr(
+        req = blockchain.create_csr(
             CN=nodename,
             ST = form['state'],
             L = form['location'],
@@ -257,7 +239,7 @@ def createcsr(status):
             emailAddress = form['email']
         )
     else:
-        for block in reversed(proofchain.chain):
+        for block in reversed(blockchain.chain):
             if nodename == block.domain:
                 if block.crt == 'revoke':
                     return render_template("errusr.html",
@@ -265,52 +247,54 @@ def createcsr(status):
                     content = "No domain exists to be able to be revoked.")
                 else:
                     break
-        p = proofchain.path_join(app.root_path,"certificates",nodename+".crt")
-        if path.exists(p):
-            req = crypto.load_certificate(crypto.FILETYPE_PEM,
-            open(p,'rb').read()).get_subject().get_components()
+        p = filer.path_join(app.root_path,"certificates",nodename+".crt")
+        if filer.file_exists(p):
+            d = filer.read(p, 'b')
+            req = blockchain.load(
+                    d, 'cert'
+                ).get_subject().get_components()
             for i in range(len(req)):
-                req[i] = (str(req[i][0]),str(req[i][1]))
-                req[i] = (req[i][0][2:len(req[i][0])-1],req[i][1][2:len(req[i][1])-1])
+                req[i] = (bytes.decode(req[i][0]), bytes.decode(req[i][1]))
             req = dict(req)
-            key = crypto.load_privatekey(crypto.FILETYPE_PEM,
-            open(proofchain.path_join(app.root_path,"keys",nodename+"_s.key"),'rb').read())
-            req = proofchain.gen_csr(key = key, **req)
+            key = blockchain.load(
+                    filer.read(
+                        filer.path_join(
+                            app.root_path, "keys", nodename + "_s.key"
+                        ),
+                        'b'),
+                    'sk'
+                )
+            req = blockchain.create_csr(key = key, **req)
 
-    csr = open(_path+nodename+".csr",'wb')
-    csr.write(
-        crypto.dump_certificate_request(crypto.FILETYPE_PEM,req)
+    filer.write(_path+nodename+".csr",'b',blockchain.dump(req,'csr'))
+    filer.write(
+        filer.path_join(app.root_path, "keys", nodename + "_s.key"),
+        'b',
+        blockchain.dump(req.get_pubkey(),'sk')
     )
-    csr.flush()
-    csr.close()
-    key = open(proofchain.path_join(app.root_path,"keys",nodename+"_s.key"),'wb')
-    key.write(
-        crypto.dump_privatekey(crypto.FILETYPE_PEM,req.get_pubkey())
+    filer.write(
+        filer.path_join(app.root_path, "keys", nodename + "_p.key"),
+        'b',
+        blockchain.dump(req.get_pubkey(), 'pk')
     )
-    key.flush()
-    key.close()
-    open(proofchain.path_join(app.root_path,"keys",nodename+"_p.key"),
-    'wb').write((crypto.b16encode(
-        crypto.dump_publickey(crypto.FILETYPE_PEM,req.get_pubkey())
-    )))
-    z = ZipFile(proofchain.path_join(app.root_path,"zips",nodename+".zip"),'w')
-    z.write(proofchain.path_join(app.root_path,"csr",nodename+".csr"),nodename+".csr")
-    z.write(proofchain.path_join(app.root_path,"keys",nodename+"_p.key"),nodename+"_p.key")
-    z.write(proofchain.path_join(app.root_path,"keys",nodename+"_s.key"),nodename+"_s.key")
+    z = ZipFile(filer.path_join(app.root_path,"zips",nodename+".zip"),'w')
+    z.write(filer.path_join(app.root_path,"csr",nodename+".csr"),nodename+".csr")
+    z.write(filer.path_join(app.root_path,"keys",nodename+"_p.key"),nodename+"_p.key")
+    z.write(filer.path_join(app.root_path,"keys",nodename+"_s.key"),nodename+"_s.key")
     #creating transaction
     s = req.get_subject()
     csr_cache.setdefault(s.CN, req)
-    proofchain.utp.setdefault(s.CN,
-        Transaction(
-            s.CN,
-            req.get_pubkey(),
-            crypto.b16encode(
-                crypto.dump_certificate_request(crypto.FILETYPE_PEM,req)
-            )[-289:-33],
-            status
+    blockchain.utp.setdefault(s.CN,
+        blockchain.createTrans(
+            {
+                'domain':s.CN,
+                'pk':req.get_pubkey(),
+                'sig':blockchain.extract_signature(blockchain.dump(req, 'csr'), 'csr', 'bytes'),
+                'crt': status
+            }
         )
     )
-    return send_file(proofchain.path_join(app.root_path,"zips",nodename+".zip")
+    return send_file(filer.path_join(app.root_path,"zips",nodename+".zip")
         ,as_attachment=True,
         mimetype="zip")
 
@@ -343,7 +327,7 @@ def sigin1():
     pw = request.form['password']
     if users.get(name):
         return redirect("/errusr/reg")
-    u = proofchain.createUser(name,"")
+    u = blockchain.createUser(name,"")
     users.setdefault(name, {
         'pw': hash(pw),
         'entity': u
@@ -370,7 +354,7 @@ def signin():
 
 @app.route("/")
 def index():
-    return render_template("index.html",chain = proofchain.chain, loggedin=loggedin)
+    return render_template("index.html",chain = blockchain.chain, loggedin=loggedin)
 
 @app.route("/contributors")
 def contributors():
