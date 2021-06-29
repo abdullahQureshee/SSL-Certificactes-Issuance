@@ -3,12 +3,12 @@
 {% block content %}
 {{super()}}
 <div class="content user">
-<button class="ft--right"><a href="{{url_for('signout')}}">Sign out</a></button>
-<header>
-  <h2>Welcome {{name.capitalize()}}</h2>
-  <p><b>Public Key: </b>{{usr.pk}}</p>
-</header>
-  <button class="crt--gen"><a href="{{url_for('register', name= name, crt = 'initial')}}">Register Domain</a></button>
-  <button class="crt--gen danger"><a href="{{url_for('register', name= name, crt='revoke')}}">Revoke Domain</a></button>
+  <button class="ft--right"><a href="{{url_for('signout')}}">Sign out</a></button>
+  <header>
+    <h2>Welcome {{name.capitalize()}}</h2>
+    <p><b>Public Key: </b>{{usr.pk}}</p>
+  </header>
+  <button class="crt--gen"><a href="{{url_for('register', name= name, csr = 'initial')}}">Register Domain</a></button>
+  <button class="crt--gen danger"><a href="{{url_for('register', name= name, csr='revoke')}}">Revoke Domain</a></button>
 </div>
 {% endblock %}

@@ -3,6 +3,7 @@ from block import Block
 from transaction import Transaction
 from OpenSSL import crypto
 
+
 class Blockchain:
     '''
     Class: Blockchain: Provides with all the basic functionality of 'proofchain'
@@ -13,23 +14,25 @@ class Blockchain:
             file handling
     '''
     GENESIS = {
-            "index": 0,
-            "crt": None,
-            "gs": None,
-            "ids": None,
-            "domain": None,
-            "pk": None,
-            "sig": None,
-            "expiry": None,
-            "CAsig": None
-        }
+        "index": 0,
+        "crt": None,
+        "gs": None,
+        "ids": None,
+        "domain": None,
+        "pk": None,
+        "sig": None,
+        "expiry": None,
+        "CAsig": None
+    }
+
     def __init__(self):
         self.chain = []
         self.chain.append(self.createBlock(Blockchain.GENESIS))
-        self.utp = {} #unvalidated transactions pool
+        self.utp = {}  # unvalidated transactions pool
         self.miners = []
-        self.registereds = {} #storageArray for verifieds
-        self.tokened = {} #those domains who have been given a token
+        self.registereds = {}  # storageArray for verifieds
+        self.tokened = {}  # those domains who have been given a token
+        self.users = {}
 
     def create_csr(self, key=None, **kwargs):
         '''
@@ -41,7 +44,7 @@ class Blockchain:
         req = crypto.X509Req()
         if key is None:
             key = crypto.PKey()
-            key.generate_key(crypto.TYPE_RSA,1024)
+            key.generate_key(crypto.TYPE_RSA, 1024)
         s = req.get_subject()
         s.CN = kwargs['CN']
         s.ST = kwargs['ST']
@@ -50,7 +53,7 @@ class Blockchain:
         s.OU = kwargs['OU']
         s.emailAddress = kwargs['emailAddress']
         req.set_pubkey(key)
-        req.sign(key,'sha256')
+        req.sign(key, 'sha256')
         return req
 
     def mine(self, block):
@@ -69,7 +72,6 @@ class Blockchain:
         self.miners.append(m)
         return m
 
-
     def createBlock(self, blockdata):
         return Block(**blockdata)
 
@@ -77,28 +79,28 @@ class Blockchain:
         t = Transaction(**transdata)
         return t
 
-    def sign(self, key, data, digest = 'sha256'):
+    def sign(self, key, data, digest='sha256'):
         return crypto.sign(key, data, digest)
 
     def create_certificate(self, key):
         c = crypto.X509()
         c.set_pubkey(key)
-        #c.set_notBefore()
-        #c.set_notAfter()
+        # c.set_notBefore()
+        # c.set_notAfter()
         return c
 
     def create_cert_for(self, csr):
         pkey = csr.get_pubkey()
         cert = self.create_certificate(pkey)
-        cert.set_subject(csr.get_subject())#req added
+        cert.set_subject(csr.get_subject())  # req added
         cert.gmtime_adj_notAfter(365)
-        cert.gmtime_adj_notBefore(0)#valid after 0 seconds
-        #sign requires secret key
+        cert.gmtime_adj_notBefore(0)  # valid after 0 seconds
+        # sign requires secret key
         pkey = self.load(
             self.dump(pkey, 'sk'),
             'sk'
         )
-        cert.sign(pkey,'sha256')
+        cert.sign(pkey, 'sha256')
         return cert
 
     def verify(self, cert, sig, data, digest='sha256'):
@@ -116,7 +118,7 @@ class Blockchain:
 
     def dump(self, data, what, _type=crypto.FILETYPE_PEM):
         if what == 'cert':
-            data =  crypto.dump_certificate(_type, data)
+            data = crypto.dump_certificate(_type, data)
         elif what == 'csr':
             data = crypto.dump_certificate_request(_type, data)
         elif what == 'pk':
@@ -124,7 +126,8 @@ class Blockchain:
         elif what == 'sk':
             data = crypto.dump_privatekey(_type, data)
         else:
-            raise Exception("Invalid type specified in arg 'what'. Can only be cert, csr, pk, sk.\n")
+            raise Exception(
+                "Invalid type specified in arg 'what'. Can only be cert, csr, pk, sk.\n")
         return data
 
     def load(self, data, what, _type=crypto.FILETYPE_PEM):
@@ -136,7 +139,8 @@ class Blockchain:
             return crypto.load_publickey(_type, data)
         if what == 'sk':
             return crypto.load_privatekey(_type, data)
-        raise Exception("Invalid type specified. Can only be cert, csr, pk, sk.\n")
+        raise Exception(
+            "Invalid type specified. Can only be cert, csr, pk, sk.\n")
 
     def create_key(self):
         k = crypto.PKey()
@@ -145,3 +149,6 @@ class Blockchain:
 
     def b16encode(self, data):
         return crypto.b16encode(data)
+
+    def create_user(self, name):
+        return {'name': name, 'tokens': [], 'domains': []}

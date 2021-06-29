@@ -7,16 +7,30 @@
     <h1>Welcome {{name}}</h1>
     <h3>Please fill in the required fields to register your domain...</h3>
   </header>
-    <form action="/createcsr/{{status}}" method="POST" class="register">
-      <label for="nodename">Domain:</label><input required type="text" name="nodename">
-      {% if status=='initial' %}
-      <label for="state">State:</label><input required type="text" name="state">
-      <label for="location">Location:</label><input required type="text" name="location">
-      <label for="organization">Organization:</label><input required type="text" name="organization">
-      <label for="orgunit">Organizational Unit:</label><input required type="text" name="orgunit">
-      <label for="email">Email:</label><input required type="text" name="email">
-      {% endif %}
-      <button type="submit">Submit:</button>
-    </form>
+  <form action="/createcsr/{{csr}}" method="POST" class="register">
+    <label for="nodename">Domain:</label><input required type="text" name="nodename">
+    {% if csr=='initial' %}
+    <label for="location">Location:</label>
+    <select name="location">
+      <option value="Pk">Pk</option>
+      <option value="In">In</option>
+      <option value="Ba">Ba</option>
+    </select>
+    <label for="state">State:</label>
+    <select name="state">
+      <option value="Lh">Lh</option>
+      <option value="Kr">Kr</option>
+      <option value="Mu">Mu</option>
+      <option value="Bo">Bo</option>
+      <option value="Jk">Jk</option>
+      <option value="Lu">Lu</option>
+    </select>
+    <label for="organization">Organization:</label><input required type="text" name="organization">
+    <label for="orgunit">Organizational Unit:</label><input required type="text" name="orgunit">
+    <label for="email">Email:</label><input required type="text" pattern="[a-zA-Z0-9]+@(org|[a-zA-Z]+\.edu)\.pk"
+      name="email">
+    {% endif %}
+    <button type="submit">Submit:</button>
+  </form>
 </div>
 {% endblock %}
