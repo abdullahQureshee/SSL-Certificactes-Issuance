@@ -56,7 +56,7 @@ def gen_token1():
 
 @app.route("/revoke")
 def revoke():
-    return render_template("register.html", status='revoke')
+    return render_template("register.html", status='revoke', csr="revoke")
 
 
 @app.route("/gen_token/<tx>/<status>")
@@ -273,6 +273,10 @@ def createcsr(status):
                                            content="No domain exists to be able to be revoked.")
                 else:
                     break
+        else:
+            return render_template("errusr.html",
+                                   header="domain error",
+                                   content="No domain exists to be able to be revoked.")
         p = filer.path_join(app.root_path, "certificates", nodename+".crt")
         if filer.file_exists(p):
             d = filer.read(p, 'b')
@@ -436,7 +440,6 @@ def search2():
     value = form.get('value')
     if value.isnumeric():
         value = int(value)
-        print(value)
         if 0 < value <= len(blockchain.chain):
             return render_template('errusr.html', header='', content=str(blockchain.chain[value-1]))
     elif (value.isalnum()):
